@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -49,6 +50,18 @@
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
+    
+    --therapy-blue-light: 206 93% 94%;
+    --therapy-blue-default: 200 98% 77%;
+    --therapy-blue-dark: 207 89% 54%;
+    
+    --therapy-neutral-light: 0 0% 96%;
+    --therapy-neutral-default: 0 0% 93%;
+    --therapy-neutral-dark: 0 0% 88%;
+    
+    --sand-light: 38 47% 80%;
+    --sand-default: 38 38% 73%;
+    --sand-dark: 38 29% 66%;
   }
 
   .dark {
@@ -97,5 +110,27 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@media print {
+  @page {
+    margin: 2cm;
+  }
+  
+  body {
+    font-size: 14px;
+  }
+  
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  .print\:shadow-none {
+    box-shadow: none !important;
+  }
+  
+  .print\:mt-20 {
+    margin-top: 5rem !important;
   }
 }
