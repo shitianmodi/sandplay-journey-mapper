@@ -66,6 +66,7 @@ interface PlacedFigure {
   x: number;
   y: number;
   category: string;
+  timestamp?: number;
 }
 
 const SandTrayPage = () => {
@@ -73,11 +74,13 @@ const SandTrayPage = () => {
   const [placedFigures, setPlacedFigures] = useState<PlacedFigure[]>([]);
   const sandboxRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
   const [isDragging, setIsDragging] = useState(false);
   const [view, setView] = useState<"manual" | "camera">("manual");
   const [isDetecting, setIsDetecting] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [isTracking, setIsTracking] = useState(false);
+  const trackingIntervalRef = useRef<number | null>(null);
 
   // Handle placing a figure in the sandbox
   const handleSandboxClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -97,7 +100,8 @@ const SandTrayPage = () => {
         ...selectedFigure,
         x,
         y,
-        category
+        category,
+        timestamp: Date.now()
       }
     ]);
     
@@ -124,7 +128,8 @@ const SandTrayPage = () => {
       newPlacedFigures[index] = {
         ...newPlacedFigures[index],
         x,
-        y
+        y,
+        timestamp: Date.now() // Update timestamp when moved
       };
       setPlacedFigures(newPlacedFigures);
     }
@@ -145,7 +150,7 @@ const SandTrayPage = () => {
   // Handle finishing the arrangement
   const handleFinish = () => {
     if (placedFigures.length < 3) {
-      toast({
+      uiToast({
         variant: "destructive",
         title: "沙具数量不足",
         description: "请至少放置3个沙具以完成摆放",
@@ -153,15 +158,118 @@ const SandTrayPage = () => {
       return;
     }
     
+    // Stop tracking if active
+    if (isTracking) {
+      stopTracking();
+    }
+    
     // Store the placed figures in sessionStorage
     sessionStorage.setItem("sandTrayFigures", JSON.stringify(placedFigures));
     
-    toast({
+    // Get tracking data if available
+    const trackingData = YoloDetectionService.getTrackingHistory();
+    if (trackingData.length > 0) {
+      sessionStorage.setItem("sandTrayTracking", JSON.stringify(trackingData));
+    }
+    
+    uiToast({
       title: "摆放完成",
       description: "您已成功完成沙盘摆放",
     });
     
     navigate("/results");
+  };
+
+  // Start object tracking
+  const startTracking = () => {
+    if (isTracking) return;
+    
+    // Start a new tracking session
+    YoloDetectionService.startTrackingSession();
+    setIsTracking(true);
+    toast("开始记录沙具位置变化", { duration: 2000 });
+    
+    // Set up interval for continuous capture
+    const intervalId = window.setInterval(() => {
+      if (videoRef.current && videoRef.current.readyState === 4) {
+        captureForTracking();
+      }
+    }, 2000); // Capture every 2 seconds
+    
+    trackingIntervalRef.current = intervalId;
+  };
+
+  // Stop object tracking
+  const stopTracking = () => {
+    if (!isTracking) return;
+    
+    // Clear the tracking interval
+    if (trackingIntervalRef.current) {
+      clearInterval(trackingIntervalRef.current);
+      trackingIntervalRef.current = null;
+    }
+    
+    // End tracking session and get results
+    const trackingResults = YoloDetectionService.endTrackingSession();
+    setIsTracking(false);
+    
+    toast("停止记录沙具位置变化", {
+      description: `已记录 ${trackingResults.length} 个沙具的移动轨迹`,
+      duration: 3000
+    });
+  };
+
+  // Reference to video element for tracking
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  
+  // Capture frame for tracking
+  const captureForTracking = () => {
+    if (!videoRef.current || !isTracking) return;
+    
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = canvas.toDataURL('image/jpeg');
+      
+      // Process the frame with YOLO
+      YoloDetectionService.detectObjects(imageData)
+        .then(objects => {
+          // Update placed figures from detection results
+          const newFigures = objects.map(obj => {
+            // Find matching figure in our categories
+            let emoji = "❓";
+            let categoryId = obj.category;
+            
+            const category = figureCategories.find(cat => cat.id === obj.category);
+            if (category) {
+              const figure = category.figures.find(fig => fig.id === obj.name);
+              if (figure) {
+                emoji = figure.emoji;
+              }
+            }
+            
+            return {
+              id: obj.id,
+              name: obj.name,
+              emoji: emoji,
+              x: obj.bbox.x + obj.bbox.width/2,
+              y: obj.bbox.y + obj.bbox.height/2,
+              category: categoryId,
+              timestamp: Date.now()
+            };
+          });
+          
+          setPlacedFigures(newFigures);
+        })
+        .catch(err => {
+          console.error("Error during tracking:", err);
+        });
+    }
   };
 
   // Load any saved figures from sessionStorage
@@ -175,6 +283,13 @@ const SandTrayPage = () => {
     YoloDetectionService.loadModel().catch(error => {
       console.error("Failed to preload YOLO model:", error);
     });
+    
+    // Cleanup tracking on unmount
+    return () => {
+      if (trackingIntervalRef.current) {
+        clearInterval(trackingIntervalRef.current);
+      }
+    };
   }, []);
   
   // Handle image capture from video stream
@@ -188,12 +303,14 @@ const SandTrayPage = () => {
     setIsDetecting(true);
     
     try {
-      toast.info("正在识别沙具...", { duration: 2000 });
+      toast("正在识别沙具...", { duration: 2000 });
       
       const detectedObjects = await YoloDetectionService.detectObjects(imageData);
       
       if (detectedObjects.length === 0) {
-        toast.warning("未检测到沙具，请尝试调整摄像头或光线");
+        toast("未检测到沙具，请尝试调整摄像头或光线", {
+          duration: 3000
+        });
         return;
       }
       
@@ -217,16 +334,22 @@ const SandTrayPage = () => {
           emoji: emoji,
           x: obj.bbox.x + obj.bbox.width/2,
           y: obj.bbox.y + obj.bbox.height/2,
-          category: categoryId
+          category: categoryId,
+          timestamp: Date.now()
         };
       });
       
       setPlacedFigures(newFigures);
       
-      toast.success(`成功识别 ${newFigures.length} 个沙具`);
+      toast("成功识别 " + newFigures.length + " 个沙具", {
+        duration: 2000
+      });
     } catch (error) {
       console.error("Error detecting objects:", error);
-      toast.error("沙具识别失败，请重试");
+      toast("沙具识别失败，请重试", {
+        variant: "destructive",
+        duration: 3000
+      });
     } finally {
       setIsDetecting(false);
     }
@@ -294,7 +417,9 @@ const SandTrayPage = () => {
               </div>
             ) : (
               <div className="w-full">
-                <VideoStream onCapture={handleImageCapture} />
+                <VideoStream 
+                  onCapture={handleImageCapture} 
+                />
                 {capturedImage && (
                   <div className="mt-4">
                     <div className="relative w-full aspect-[4/3] border-4 border-sand-dark bg-sand-light rounded overflow-hidden">
@@ -331,6 +456,19 @@ const SandTrayPage = () => {
                             <div className="w-16 h-16 border-t-4 border-white rounded-full animate-spin mx-auto"></div>
                           </div>
                         </div>
+                      )}
+                    </div>
+                    
+                    {/* Tracking controls */}
+                    <div className="mt-4 flex justify-center">
+                      {!isTracking ? (
+                        <Button onClick={startTracking} className="bg-green-600 hover:bg-green-700">
+                          开始记录沙具位置变化
+                        </Button>
+                      ) : (
+                        <Button onClick={stopTracking} variant="destructive">
+                          停止记录
+                        </Button>
                       )}
                     </div>
                   </div>

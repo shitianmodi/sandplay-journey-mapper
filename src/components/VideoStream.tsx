@@ -34,7 +34,10 @@ const VideoStream = ({ onCapture }: VideoStreamProps) => {
       }
     } catch (error) {
       console.error("Error accessing camera:", error);
-      toast.error("无法访问摄像头，请检查权限设置");
+      toast("无法访问摄像头，请检查权限设置", {
+        description: "Camera access error",
+        variant: "destructive"
+      });
     }
   };
 
@@ -69,7 +72,9 @@ const VideoStream = ({ onCapture }: VideoStreamProps) => {
           onCapture(imageData);
         }
         
-        toast.success("已捕获图像，准备进行分析");
+        toast("已捕获图像，准备进行分析", {
+          description: "Image captured successfully"
+        });
       }
     }
   };

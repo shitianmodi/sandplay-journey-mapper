@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
 import { Separator } from "@/components/ui/separator";
-import ReportGenerationService from "../services/ReportGenerationService";
+import ChatEcnuService from "../services/ChatEcnuService";
 
 interface PlacedFigure {
   id: string;
@@ -18,6 +18,18 @@ interface PlacedFigure {
   x: number;
   y: number;
   category: string;
+  timestamp?: number;
+}
+
+interface ObjectTrackingData {
+  objectId: string;
+  name: string;
+  category: string;
+  positions: Array<{
+    x: number;
+    y: number;
+    timestamp: number;
+  }>;
 }
 
 interface AnalysisResult {
@@ -27,22 +39,24 @@ interface AnalysisResult {
   totalFigures: number;
   overallAnalysis: string;
   detailedAnalysis?: string;
+  trackingData?: ObjectTrackingData[];
 }
 
 const ResultsPage = () => {
   const [figures, setFigures] = useState<PlacedFigure[]>([]);
+  const [trackingData, setTrackingData] = useState<ObjectTrackingData[]>([]);
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
   const [apiKey, setApiKey] = useState<string>("");
   const [isGeneratingLLMAnalysis, setIsGeneratingLLMAnalysis] = useState(false);
   const navigate = useNavigate();
-  const { toast } = useToast();
+  const { toast: uiToast } = useToast();
 
   useEffect(() => {
     // Load saved figures from sessionStorage
     const savedFigures = sessionStorage.getItem("sandTrayFigures");
     if (!savedFigures) {
-      toast({
+      uiToast({
         variant: "destructive",
         title: "没有找到沙盘数据",
         description: "请先完成沙盘摆放",
@@ -53,21 +67,48 @@ const ResultsPage = () => {
     
     const figures = JSON.parse(savedFigures);
     setFigures(figures);
+    
+    // Load tracking data if available
+    const savedTracking = sessionStorage.getItem("sandTrayTracking");
+    if (savedTracking) {
+      setTrackingData(JSON.parse(savedTracking));
+    }
 
     // Simulate analysis processing
     setLoading(true);
     setTimeout(() => {
-      const analysisResult = analyzeResults(figures);
+      const analysisResult = analyzeResults(figures, savedTracking ? JSON.parse(savedTracking) : []);
       setAnalysis(analysisResult);
       setLoading(false);
 
       // Save analysis to session storage for report page
       sessionStorage.setItem("sandTrayAnalysis", JSON.stringify(analysisResult));
     }, 1500);
-  }, [navigate, toast]);
+  }, [navigate, uiToast]);
+
+  // Analyze tracking data
+  const analyzeTrackingData = (trackingData: ObjectTrackingData[]) => {
+    // Simple summary of tracking data
+    const totalMoves = trackingData.reduce((sum, obj) => sum + obj.positions.length, 0);
+    const avgMovesPerObject = totalMoves / trackingData.length;
+    
+    let summary = `沙具移动轨迹分析：共记录了 ${trackingData.length} 个沙具，` +
+      `总计 ${totalMoves} 次位置变化，平均每个沙具移动 ${avgMovesPerObject.toFixed(1)} 次。`;
+      
+    // Identify most moved object
+    if (trackingData.length > 0) {
+      const mostMovedObject = trackingData.reduce((prev, current) => 
+        prev.positions.length > current.positions.length ? prev : current
+      );
+      
+      summary += ` 其中 "${mostMovedObject.name}" 移动最频繁，共记录了 ${mostMovedObject.positions.length} 次位置变化。`;
+    }
+    
+    return summary;
+  };
 
   // Fake analysis function - in a real app, this would be much more sophisticated
-  const analyzeResults = (figures: PlacedFigure[]): AnalysisResult => {
+  const analyzeResults = (figures: PlacedFigure[], tracking: ObjectTrackingData[]): AnalysisResult => {
     const totalFigures = figures.length;
     
     // Category distribution
@@ -172,35 +213,41 @@ const ResultsPage = () => {
     } else if (naturalRatio > 0.3) {
       overallAnalysis += " 自然元素沙具比例较高，可能表示对环境、成长或变化有特别关注。";
     }
+    
+    // Add tracking data analysis if available
+    if (tracking.length > 0) {
+      overallAnalysis += " " + analyzeTrackingData(tracking);
+    }
 
     return {
       categoryDistribution,
       placementPatterns,
       quadrantAnalysis,
       totalFigures,
-      overallAnalysis
+      overallAnalysis,
+      trackingData: tracking
     };
   };
 
   const handleGenerateLLMAnalysis = async () => {
-    if (!apiKey && !analysis) return;
+    if (!apiKey || !analysis) return;
     
     setIsGeneratingLLMAnalysis(true);
     
     try {
       // Set API key for the service
-      ReportGenerationService.setApiKey(apiKey);
+      ChatEcnuService.setApiKey(apiKey);
       
-      // Generate detailed analysis using LLM
-      const detailedAnalysis = await ReportGenerationService.generateReport({
+      // Generate detailed analysis using ChatECNU API
+      const detailedAnalysis = await ChatEcnuService.generateSandTrayReport({
         figures,
-        quadrantAnalysis: analysis!.quadrantAnalysis,
-        categoryDistribution: analysis!.categoryDistribution
+        quadrantAnalysis: analysis.quadrantAnalysis,
+        categoryDistribution: analysis.categoryDistribution
       });
       
       // Update analysis with LLM results
       const updatedAnalysis = {
-        ...analysis!,
+        ...analysis,
         detailedAnalysis
       };
       
@@ -209,10 +256,14 @@ const ResultsPage = () => {
       // Update in session storage
       sessionStorage.setItem("sandTrayAnalysis", JSON.stringify(updatedAnalysis));
       
-      toast.success("大模型分析已完成");
+      toast("大模型分析已完成", {
+        description: "AI 分析报告已生成"
+      });
     } catch (error) {
       console.error("Error generating LLM analysis:", error);
-      toast.error("生成分析失败，请检查API密钥或网络连接");
+      toast("生成分析失败，请检查API密钥或网络连接", {
+        variant: "destructive"
+      });
     } finally {
       setIsGeneratingLLMAnalysis(false);
     }
@@ -249,6 +300,50 @@ const ResultsPage = () => {
                 </div>
               </CardContent>
             </Card>
+            
+            {/* Tracking data visualization if available */}
+            {analysis.trackingData && analysis.trackingData.length > 0 && (
+              <Card>
+                <CardContent className="pt-6">
+                  <h3 className="text-xl font-bold mb-4">沙具移动轨迹</h3>
+                  <div className="space-y-4">
+                    <div className="bg-gray-100 p-4 rounded-md">
+                      <p className="font-medium mb-2">轨迹记录摘要：</p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>共记录 {analysis.trackingData.length} 个沙具的移动轨迹</li>
+                        <li>总计 {analysis.trackingData.reduce((sum, obj) => sum + obj.positions.length, 0)} 次位置变化</li>
+                        <li>平均每个沙具记录 {(analysis.trackingData.reduce((sum, obj) => sum + obj.positions.length, 0) / analysis.trackingData.length).toFixed(1)} 个位置点</li>
+                      </ul>
+                    </div>
+                    
+                    {/* Display most frequently moved objects */}
+                    <div className="mt-4">
+                      <h4 className="font-medium mb-2">移动频率最高的沙具：</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {analysis.trackingData
+                          .sort((a, b) => b.positions.length - a.positions.length)
+                          .slice(0, 4)
+                          .map(obj => (
+                            <div key={obj.objectId} className="border rounded-md p-3">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <span className="text-lg mr-2">
+                                    {figureCategories.find(cat => cat.id === obj.category)?.figures.find(fig => fig.id === obj.name)?.emoji || '❓'}
+                                  </span>
+                                  <span className="font-medium">{obj.name}</span>
+                                </div>
+                                <span className="text-sm bg-gray-200 px-2 py-1 rounded">
+                                  {obj.positions.length} 次移动
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <Card>
@@ -302,10 +397,10 @@ const ResultsPage = () => {
               </CardContent>
             </Card>
             
-            {/* LLM Analysis Section */}
+            {/* ChatECNU LLM Analysis Section */}
             <Card>
               <CardContent className="pt-6">
-                <h3 className="text-xl font-bold mb-4">大模型详细分析</h3>
+                <h3 className="text-xl font-bold mb-4">ChatECNU大模型分析</h3>
                 {analysis.detailedAnalysis ? (
                   <div className="prose prose-sm max-w-none">
                     <div className="text-gray-700 whitespace-pre-line">
@@ -314,15 +409,15 @@ const ResultsPage = () => {
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    <p className="text-gray-500">使用AI大模型获取更详细的沙盘分析报告</p>
+                    <p className="text-gray-500">使用ChatECNU大模型获取更详细的沙盘分析报告</p>
                     <div className="flex items-end gap-2">
                       <div className="flex-grow">
-                        <label className="block text-sm font-medium mb-1">大模型API密钥</label>
+                        <label className="block text-sm font-medium mb-1">ChatECNU API密钥</label>
                         <Input
                           type="password"
                           value={apiKey}
                           onChange={(e) => setApiKey(e.target.value)}
-                          placeholder="输入OpenAI API密钥"
+                          placeholder="输入ChatECNU API密钥"
                         />
                       </div>
                       <Button 
@@ -333,7 +428,7 @@ const ResultsPage = () => {
                       </Button>
                     </div>
                     <p className="text-xs text-gray-400">
-                      API密钥仅在本地使用，不会被保存或发送到服务器
+                      默认API密钥: sk-f178bb48f976477b9002a1bc817a9544
                     </p>
                   </div>
                 )}

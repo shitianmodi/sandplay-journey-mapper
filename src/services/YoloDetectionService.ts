@@ -15,13 +15,27 @@ interface DetectedObject {
     width: number;
     height: number;
   };
+  timestamp?: number; // Added timestamp for tracking
+}
+
+interface ObjectTrackingData {
+  objectId: string;
+  name: string;
+  category: string;
+  positions: Array<{
+    x: number;
+    y: number;
+    timestamp: number;
+  }>;
 }
 
 export class YoloDetectionService {
   private model: any = null;
   private isLoading: boolean = false;
   private modelUrl: string = "/models/sandtray-yolo-model.onnx"; // Path to your YOLO model
-
+  private trackingHistory: ObjectTrackingData[] = [];
+  private currentSession: string | null = null;
+  
   constructor() {
     // Model will be loaded on demand
   }
@@ -52,6 +66,65 @@ export class YoloDetectionService {
     } finally {
       this.isLoading = false;
     }
+  }
+
+  /**
+   * Start a new tracking session
+   */
+  startTrackingSession(): string {
+    this.trackingHistory = [];
+    this.currentSession = new Date().toISOString();
+    return this.currentSession;
+  }
+
+  /**
+   * End the current tracking session and return the data
+   */
+  endTrackingSession(): ObjectTrackingData[] {
+    this.currentSession = null;
+    return [...this.trackingHistory];
+  }
+
+  /**
+   * Get the current tracking history
+   */
+  getTrackingHistory(): ObjectTrackingData[] {
+    return [...this.trackingHistory];
+  }
+
+  /**
+   * Track detected objects over time
+   */
+  trackObjects(detectedObjects: DetectedObject[]): void {
+    if (!this.currentSession) return;
+    
+    const timestamp = Date.now();
+    
+    // Add timestamp to each detected object
+    detectedObjects.forEach(obj => {
+      obj.timestamp = timestamp;
+      
+      // Find or create tracking data for this object
+      let trackingData = this.trackingHistory.find(td => td.objectId === obj.id);
+      
+      if (!trackingData) {
+        // Create new tracking record if this object hasn't been seen before
+        trackingData = {
+          objectId: obj.id,
+          name: obj.name,
+          category: obj.category,
+          positions: []
+        };
+        this.trackingHistory.push(trackingData);
+      }
+      
+      // Add current position to tracking data
+      trackingData.positions.push({
+        x: obj.bbox.x + obj.bbox.width / 2, // Center X
+        y: obj.bbox.y + obj.bbox.height / 2, // Center Y
+        timestamp
+      });
+    });
   }
 
   /**
@@ -114,7 +187,14 @@ export class YoloDetectionService {
     try {
       // In a real implementation, this would process the image using the YOLO model
       // For now, we're using the mock detection
-      return await this.model.detect(imageData);
+      const detectedObjects = await this.model.detect(imageData);
+      
+      // Track objects if we're in a tracking session
+      if (this.currentSession) {
+        this.trackObjects(detectedObjects);
+      }
+      
+      return detectedObjects;
     } catch (error) {
       console.error("Error detecting objects:", error);
       throw error;
