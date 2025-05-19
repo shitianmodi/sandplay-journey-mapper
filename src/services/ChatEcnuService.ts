@@ -115,6 +115,15 @@ class ChatEcnuService {
     messages: ChatEcnuMessage[],
     options: ChatEcnuOptions = {}
   ): Promise<string> {
+    if (!this.apiKey) {
+      console.error("API key not set - cannot make request to ChatECNU");
+      throw new Error("API key is not set");
+    }
+
+    console.log("Preparing to send request to ChatECNU API");
+    console.log(`API Endpoint: ${this.baseUrl}`);
+    console.log(`Using API key: ${this.apiKey.substring(0, 5)}...${this.apiKey.substring(this.apiKey.length - 4)}`);
+    
     const requestData = {
       messages: messages,
       stream: false,
@@ -125,21 +134,34 @@ class ChatEcnuService {
     };
 
     try {
+      console.log("Sending request to ChatECNU API:", JSON.stringify({
+        ...requestData,
+        messages: requestData.messages.map(m => ({
+          role: m.role,
+          content: m.content.substring(0, 50) + "..." // Log only first 50 chars of content for brevity
+        }))
+      }));
+      
       const response = await fetch(this.baseUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify(requestData),
+        mode: 'cors'
       });
 
+      console.log("Response received. Status:", response.status);
+      
       if (!response.ok) {
         const errorText = await response.text();
+        console.error("API Error Response:", errorText);
         throw new Error(`API request failed: ${response.status} ${errorText}`);
       }
 
       const data = await response.json();
+      console.log("API Response processed successfully");
       return data.choices[0].message.content;
     } catch (error) {
       console.error("ChatECNU API request failed:", error);

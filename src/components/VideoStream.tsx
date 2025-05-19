@@ -1,4 +1,3 @@
-
 import React, { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -35,8 +34,7 @@ const VideoStream = ({ onCapture }: VideoStreamProps) => {
     } catch (error) {
       console.error("Error accessing camera:", error);
       toast("无法访问摄像头，请检查权限设置", {
-        description: "Camera access error",
-        variant: "destructive"
+        description: "Camera access error"
       });
     }
   };

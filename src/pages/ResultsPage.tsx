@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -10,6 +9,7 @@ import { toast } from "sonner";
 import Layout from "../components/Layout";
 import { Separator } from "@/components/ui/separator";
 import ChatEcnuService from "../services/ChatEcnuService";
+import { figureCategories } from "../data/figureData";
 
 interface PlacedFigure {
   id: string;
@@ -261,9 +261,7 @@ const ResultsPage = () => {
       });
     } catch (error) {
       console.error("Error generating LLM analysis:", error);
-      toast("生成分析失败，请检查API密钥或网络连接", {
-        variant: "destructive"
-      });
+      toast("生成分析失败，请检查API密钥或网络连接");
     } finally {
       setIsGeneratingLLMAnalysis(false);
     }
