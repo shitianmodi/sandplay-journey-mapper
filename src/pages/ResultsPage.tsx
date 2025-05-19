@@ -5,8 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
 import Layout from "../components/Layout";
 import { Separator } from "@/components/ui/separator";
+import ReportGenerationService from "../services/ReportGenerationService";
 
 interface PlacedFigure {
   id: string;
@@ -23,12 +26,15 @@ interface AnalysisResult {
   quadrantAnalysis: { name: string; description: string; figureCount: number }[];
   totalFigures: number;
   overallAnalysis: string;
+  detailedAnalysis?: string;
 }
 
 const ResultsPage = () => {
   const [figures, setFigures] = useState<PlacedFigure[]>([]);
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
+  const [apiKey, setApiKey] = useState<string>("");
+  const [isGeneratingLLMAnalysis, setIsGeneratingLLMAnalysis] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -176,6 +182,42 @@ const ResultsPage = () => {
     };
   };
 
+  const handleGenerateLLMAnalysis = async () => {
+    if (!apiKey && !analysis) return;
+    
+    setIsGeneratingLLMAnalysis(true);
+    
+    try {
+      // Set API key for the service
+      ReportGenerationService.setApiKey(apiKey);
+      
+      // Generate detailed analysis using LLM
+      const detailedAnalysis = await ReportGenerationService.generateReport({
+        figures,
+        quadrantAnalysis: analysis!.quadrantAnalysis,
+        categoryDistribution: analysis!.categoryDistribution
+      });
+      
+      // Update analysis with LLM results
+      const updatedAnalysis = {
+        ...analysis!,
+        detailedAnalysis
+      };
+      
+      setAnalysis(updatedAnalysis);
+      
+      // Update in session storage
+      sessionStorage.setItem("sandTrayAnalysis", JSON.stringify(updatedAnalysis));
+      
+      toast.success("大模型分析已完成");
+    } catch (error) {
+      console.error("Error generating LLM analysis:", error);
+      toast.error("生成分析失败，请检查API密钥或网络连接");
+    } finally {
+      setIsGeneratingLLMAnalysis(false);
+    }
+  };
+
   const handleViewReport = () => {
     navigate("/report");
   };
@@ -257,6 +299,44 @@ const ResultsPage = () => {
                     </div>
                   ))}
                 </div>
+              </CardContent>
+            </Card>
+            
+            {/* LLM Analysis Section */}
+            <Card>
+              <CardContent className="pt-6">
+                <h3 className="text-xl font-bold mb-4">大模型详细分析</h3>
+                {analysis.detailedAnalysis ? (
+                  <div className="prose prose-sm max-w-none">
+                    <div className="text-gray-700 whitespace-pre-line">
+                      {analysis.detailedAnalysis}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <p className="text-gray-500">使用AI大模型获取更详细的沙盘分析报告</p>
+                    <div className="flex items-end gap-2">
+                      <div className="flex-grow">
+                        <label className="block text-sm font-medium mb-1">大模型API密钥</label>
+                        <Input
+                          type="password"
+                          value={apiKey}
+                          onChange={(e) => setApiKey(e.target.value)}
+                          placeholder="输入OpenAI API密钥"
+                        />
+                      </div>
+                      <Button 
+                        onClick={handleGenerateLLMAnalysis} 
+                        disabled={!apiKey || isGeneratingLLMAnalysis}
+                      >
+                        {isGeneratingLLMAnalysis ? "生成中..." : "生成分析"}
+                      </Button>
+                    </div>
+                    <p className="text-xs text-gray-400">
+                      API密钥仅在本地使用，不会被保存或发送到服务器
+                    </p>
+                  </div>
+                )}
               </CardContent>
             </Card>
             

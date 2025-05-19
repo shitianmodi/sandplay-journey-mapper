@@ -23,6 +23,7 @@ interface AnalysisResult {
   quadrantAnalysis: { name: string; description: string; figureCount: number }[];
   totalFigures: number;
   overallAnalysis: string;
+  detailedAnalysis?: string;
 }
 
 const ReportPage = () => {
@@ -134,6 +135,22 @@ const ReportPage = () => {
                 </Card>
               </section>
               
+              {/* Show LLM Analysis if available */}
+              {analysis.detailedAnalysis && (
+                <section className="mb-8">
+                  <h2 className="text-2xl font-bold mb-4">AI辅助详细分析</h2>
+                  <Card>
+                    <CardContent className="pt-6">
+                      <div className="prose prose-sm max-w-none">
+                        <div className="text-gray-700 whitespace-pre-line">
+                          {analysis.detailedAnalysis}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </section>
+              )}
+              
               <section className="mb-8">
                 <h2 className="text-2xl font-bold mb-4">类别分布详情</h2>
                 <div className="grid gap-4">
@@ -226,37 +243,54 @@ const ReportPage = () => {
                 <h2 className="text-2xl font-bold mb-4">治疗建议</h2>
                 <Card>
                   <CardContent className="pt-6">
-                    <p className="mb-4">
-                      基于沙盘摆放分析，建议在后续治疗中关注以下方面：
-                    </p>
-                    <ul className="list-disc list-inside space-y-3">
-                      <li>
-                        {analysis.quadrantAnalysis.sort((a, b) => b.figureCount - a.figureCount)[0].name}
-                        区域沙具密集，可进一步探索与
-                        {analysis.quadrantAnalysis.sort((a, b) => b.figureCount - a.figureCount)[0].description}
-                        相关的内容。
-                      </li>
-                      <li>
-                        {analysis.categoryDistribution.sort((a, b) => b.count - a.count)[0].name}
-                        类沙具使用频繁，表明来访者在相关情境中可能有特别的情感投入。
-                      </li>
-                      {analysis.placementPatterns[0].score > 70 && (
-                        <li>
-                          沙具摆放较为集中，可能表示内心聚焦于特定问题，建议在安全的治疗环境中逐步探索。
-                        </li>
-                      )}
-                      {analysis.placementPatterns[0].score < 30 && (
-                        <li>
-                          沙具摆放较为分散，可能表示存在多种情绪或关注点，建议协助来访者逐一整合这些体验。
-                        </li>
-                      )}
-                    </ul>
+                    {analysis.detailedAnalysis ? (
+                      <div className="prose prose-sm max-w-none">
+                        <h3 className="text-lg font-medium mb-2">AI辅助治疗建议</h3>
+                        <div className="text-gray-700">
+                          {/* Extract the therapeutic recommendations from AI analysis */}
+                          {analysis.detailedAnalysis.includes("治疗建议") ? 
+                            analysis.detailedAnalysis.split("治疗建议").pop() : 
+                            "请参考上方AI分析报告中的治疗建议部分。"}
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <p className="mb-4">
+                          基于沙盘摆放分析，建议在后续治疗中关注以下方面：
+                        </p>
+                        <ul className="list-disc list-inside space-y-3">
+                          <li>
+                            {analysis.quadrantAnalysis.sort((a, b) => b.figureCount - a.figureCount)[0].name}
+                            区域沙具密集，可进一步探索与
+                            {analysis.quadrantAnalysis.sort((a, b) => b.figureCount - a.figureCount)[0].description}
+                            相关的内容。
+                          </li>
+                          <li>
+                            {analysis.categoryDistribution.sort((a, b) => b.count - a.count)[0].name}
+                            类沙具使用频繁，表明来访者在相关情境中可能有特别的情感投入。
+                          </li>
+                          {analysis.placementPatterns[0].score > 70 && (
+                            <li>
+                              沙具摆放较为集中，可能表示内心聚焦于特定问题，建议在安全的治疗环境中逐步探索。
+                            </li>
+                          )}
+                          {analysis.placementPatterns[0].score < 30 && (
+                            <li>
+                              沙具摆放较为分散，可能表示存在多种情绪或关注点，建议协助来访者逐一整合这些体验。
+                            </li>
+                          )}
+                        </ul>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </section>
               
               <div className="mt-10 text-center text-gray-500 text-sm print:mt-20">
                 <p>本报告由沙盘治疗分析系统自动生成，仅供专业治疗师参考</p>
+                {analysis.detailedAnalysis && (
+                  <p className="mt-1">报告包含AI辅助分析内容，请专业人士进行解读</p>
+                )}
                 <p className="mt-1">© 2025 沙盘治疗分析系统 - 所有权利保留</p>
               </div>
             </>
