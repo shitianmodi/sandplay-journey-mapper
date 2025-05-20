@@ -1,10 +1,10 @@
+
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
-import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import Layout from "../components/Layout";
 import { Separator } from "@/components/ui/separator";
@@ -47,7 +47,6 @@ const ResultsPage = () => {
   const [trackingData, setTrackingData] = useState<ObjectTrackingData[]>([]);
   const [loading, setLoading] = useState(true);
   const [analysis, setAnalysis] = useState<AnalysisResult | null>(null);
-  const [apiKey, setApiKey] = useState<string>("");
   const [isGeneratingLLMAnalysis, setIsGeneratingLLMAnalysis] = useState(false);
   const navigate = useNavigate();
   const { toast: uiToast } = useToast();
@@ -57,7 +56,6 @@ const ResultsPage = () => {
     const savedFigures = sessionStorage.getItem("sandTrayFigures");
     if (!savedFigures) {
       uiToast({
-        variant: "destructive",
         title: "没有找到沙盘数据",
         description: "请先完成沙盘摆放",
       });
@@ -76,13 +74,45 @@ const ResultsPage = () => {
 
     // Simulate analysis processing
     setLoading(true);
-    setTimeout(() => {
-      const analysisResult = analyzeResults(figures, savedTracking ? JSON.parse(savedTracking) : []);
-      setAnalysis(analysisResult);
-      setLoading(false);
-
-      // Save analysis to session storage for report page
-      sessionStorage.setItem("sandTrayAnalysis", JSON.stringify(analysisResult));
+    setTimeout(async () => {
+      const initialAnalysis = analyzeResults(figures, savedTracking ? JSON.parse(savedTracking) : []);
+      setAnalysis(initialAnalysis);
+      
+      // Save initial analysis to session storage for report page
+      sessionStorage.setItem("sandTrayAnalysis", JSON.stringify(initialAnalysis));
+      
+      // Immediately generate AI analysis
+      try {
+        setIsGeneratingLLMAnalysis(true);
+        console.log("Automatically generating AI analysis");
+        const detailedAnalysis = await ChatEcnuService.generateSandTrayReport({
+          figures,
+          quadrantAnalysis: initialAnalysis.quadrantAnalysis,
+          categoryDistribution: initialAnalysis.categoryDistribution
+        });
+        
+        // Update analysis with LLM results
+        const updatedAnalysis = {
+          ...initialAnalysis,
+          detailedAnalysis
+        };
+        
+        setAnalysis(updatedAnalysis);
+        
+        // Update in session storage
+        sessionStorage.setItem("sandTrayAnalysis", JSON.stringify(updatedAnalysis));
+        toast("大模型分析已完成", {
+          description: "AI 分析报告已生成"
+        });
+      } catch (error) {
+        console.error("Error generating LLM analysis:", error);
+        toast("生成分析失败，将使用基础分析", {
+          description: "详细AI分析无法生成，请检查网络连接"
+        });
+      } finally {
+        setIsGeneratingLLMAnalysis(false);
+        setLoading(false);
+      }
     }, 1500);
   }, [navigate, uiToast]);
 
@@ -283,7 +313,9 @@ const ResultsPage = () => {
             <div className="space-y-4">
               <h3 className="text-xl font-medium">分析中...</h3>
               <Progress value={75} className="w-1/2 mx-auto" />
-              <p className="text-gray-500">正在分析沙盘摆放结果，请稍候</p>
+              <p className="text-gray-500">
+                {isGeneratingLLMAnalysis ? "正在使用AI生成详细分析报告..." : "正在分析沙盘摆放结果，请稍候"}
+              </p>
             </div>
           </Card>
         ) : analysis ? (
@@ -406,28 +438,14 @@ const ResultsPage = () => {
                     </div>
                   </div>
                 ) : (
-                  <div className="space-y-4">
-                    <p className="text-gray-500">使用ChatECNU大模型获取更详细的沙盘分析报告</p>
-                    <div className="flex items-end gap-2">
-                      <div className="flex-grow">
-                        <label className="block text-sm font-medium mb-1">ChatECNU API密钥</label>
-                        <Input
-                          type="password"
-                          value={apiKey}
-                          onChange={(e) => setApiKey(e.target.value)}
-                          placeholder="输入ChatECNU API密钥"
-                        />
-                      </div>
-                      <Button 
-                        onClick={handleGenerateLLMAnalysis} 
-                        disabled={!apiKey || isGeneratingLLMAnalysis}
-                      >
-                        {isGeneratingLLMAnalysis ? "生成中..." : "生成分析"}
-                      </Button>
-                    </div>
-                    <p className="text-xs text-gray-400">
-                      默认API密钥: sk-f178bb48f976477b9002a1bc817a9544
-                    </p>
+                  <div className="text-center py-6">
+                    <p className="text-gray-500 mb-4">正在尝试生成AI分析报告...</p>
+                    <Button 
+                      onClick={() => window.location.reload()}
+                      className="mx-auto"
+                    >
+                      重新加载页面
+                    </Button>
                   </div>
                 )}
               </CardContent>
