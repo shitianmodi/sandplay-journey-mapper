@@ -17,6 +17,11 @@ const ConsentPage = () => {
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    // Reset canAccept when component mounts
+    setCanAccept(false);
+  }, []);
+
   // Function to check if user has scrolled to the bottom
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
@@ -26,12 +31,19 @@ const ConsentPage = () => {
     }
   };
 
+  // If user changes accepted but can't accept, reset it to false
+  useEffect(() => {
+    if (accepted && !canAccept) {
+      setAccepted(false);
+    }
+  }, [accepted, canAccept]);
+
   const handleContinue = () => {
-    if (!accepted) {
+    if (!canAccept || !accepted) {
       toast({
         variant: "destructive",
         title: "需要同意",
-        description: "请先阅读并同意咨询协议书",
+        description: "请先阅读完整协议书并同意",
       });
       return;
     }
@@ -133,6 +145,9 @@ const ConsentPage = () => {
             <p>来访者承诺整个咨询期间（包括咨询的间隔）不会实施自杀行为。若来访者违背承诺，不幸选择自杀，责任及行为后果将由来访者承担。</p>
             
             <p className="mt-6 font-bold">我已知晓并同意在进行心理沙盘治疗的过程中开放摄像头和录音。</p>
+            
+            {/* Add spacer to ensure content is scrollable to the very bottom */}
+            <div className="h-10"></div>
           </div>
         </ScrollArea>
         
@@ -155,7 +170,7 @@ const ConsentPage = () => {
             />
             <label
               htmlFor="terms"
-              className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed ${!canAccept ? 'text-gray-400' : ''}`}
+              className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed ${!canAccept ? 'text-gray-400' : 'text-gray-900'}`}
             >
               我已阅读并同意以上条款
             </label>
@@ -170,8 +185,8 @@ const ConsentPage = () => {
             </Button>
             <Button 
               onClick={handleContinue}
-              disabled={!accepted}
-              className={!accepted ? "opacity-50" : ""}
+              disabled={!accepted || !canAccept}
+              className={(!accepted || !canAccept) ? "opacity-50" : ""}
             >
               继续
             </Button>
