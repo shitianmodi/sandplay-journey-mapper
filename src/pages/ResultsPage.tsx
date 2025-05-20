@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -260,15 +259,12 @@ const ResultsPage = () => {
   };
 
   const handleGenerateLLMAnalysis = async () => {
-    if (!apiKey || !analysis) return;
+    if (!analysis) return;
     
     setIsGeneratingLLMAnalysis(true);
     
     try {
-      // Set API key for the service
-      ChatEcnuService.setApiKey(apiKey);
-      
-      // Generate detailed analysis using ChatECNU API
+      // Use the default API key from the ChatEcnuService
       const detailedAnalysis = await ChatEcnuService.generateSandTrayReport({
         figures,
         quadrantAnalysis: analysis.quadrantAnalysis,
@@ -291,7 +287,7 @@ const ResultsPage = () => {
       });
     } catch (error) {
       console.error("Error generating LLM analysis:", error);
-      toast("生成分析失败，请检查API密钥或网络连接");
+      toast("生成分析失败，请检查网络连接");
     } finally {
       setIsGeneratingLLMAnalysis(false);
     }
