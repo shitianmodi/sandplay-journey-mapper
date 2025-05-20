@@ -7,47 +7,70 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/components/ui/use-toast";
 import Layout from "../components/Layout";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 
 const ConsentPage = () => {
   const [accepted, setAccepted] = useState(false);
   const [canAccept, setCanAccept] = useState(false);
+  const [hasScrolled, setHasScrolled] = useState(false);
   const { setConsent } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const scrollAreaRef = useRef<HTMLDivElement>(null);
-
+  
+  // Reset states when component mounts
   useEffect(() => {
-    // Reset canAccept when component mounts
     setCanAccept(false);
+    setAccepted(false);
+    setHasScrolled(false);
+    
+    // Add debugging logs
+    console.log("Component mounted, states reset");
   }, []);
 
   // Function to check if user has scrolled to the bottom
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
+    setHasScrolled(true);
+    
     // Check if user has scrolled to the bottom (with a small threshold)
-    if (scrollHeight - scrollTop - clientHeight < 30) {
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 30;
+    
+    if (isAtBottom && !canAccept) {
       setCanAccept(true);
+      console.log("User scrolled to bottom, canAccept set to true");
     }
   };
 
-  // If user changes accepted but can't accept, reset it to false
+  // Reset acceptance if user hasn't scrolled to bottom
   useEffect(() => {
-    if (accepted && !canAccept) {
+    if (!canAccept && accepted) {
       setAccepted(false);
+      console.log("Reset acceptance because canAccept is false");
     }
-  }, [accepted, canAccept]);
+  }, [canAccept, accepted]);
 
   const handleContinue = () => {
-    if (!canAccept || !accepted) {
+    if (!canAccept) {
       toast({
         variant: "destructive",
-        title: "需要同意",
-        description: "请先阅读完整协议书并同意",
+        title: "请先阅读全文",
+        description: "请滑动至协议书底部后再进行同意操作",
       });
       return;
     }
     
+    if (!accepted) {
+      toast({
+        variant: "destructive",
+        title: "需要同意条款",
+        description: "请勾选"我已阅读并同意以上条款"",
+      });
+      return;
+    }
+    
+    // If everything is ok, proceed
+    console.log("Continuing with consent given");
     setConsent(true);
     toast({
       title: "已确认同意",
@@ -56,12 +79,28 @@ const ConsentPage = () => {
     navigate("/sand-tray");
   };
 
+  // Handle checkbox change with explicit logging
+  const handleCheckboxChange = (checked: boolean) => {
+    console.log("Checkbox changed:", checked, "canAccept:", canAccept);
+    if (canAccept) {
+      setAccepted(checked);
+    } else {
+      // If user tries to check without scrolling
+      if (checked) {
+        toast({
+          title: "请先阅读全文",
+          description: "请滑动至协议书底部后再进行同意操作",
+        });
+        setAccepted(false);
+      }
+    }
+  };
+
   return (
     <Layout title="咨询协议书" currentStep={1} showNavigation={true}>
       <div className="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md animate-fade-in">
         <ScrollArea 
           className="h-[400px] rounded-md border p-4 relative" 
-          ref={scrollAreaRef}
           onScroll={handleScroll}
         >
           <div className="space-y-4">
@@ -147,15 +186,24 @@ const ConsentPage = () => {
             <p className="mt-6 font-bold">我已知晓并同意在进行心理沙盘治疗的过程中开放摄像头和录音。</p>
             
             {/* Add spacer to ensure content is scrollable to the very bottom */}
-            <div className="h-10"></div>
+            <div className="h-20"></div>
           </div>
         </ScrollArea>
         
         {!canAccept && (
-          <div className="flex justify-center mt-4 text-gray-500 animate-bounce">
+          <div className="flex justify-center mt-4 text-blue-600 animate-bounce">
             <div className="flex flex-col items-center">
-              <span className="text-sm mb-1">请滑动阅读全文</span>
+              <span className="text-sm mb-1">请滑动阅读全文至底部</span>
               <ChevronDown className="h-5 w-5" />
+            </div>
+          </div>
+        )}
+        
+        {canAccept && !accepted && (
+          <div className="flex justify-center mt-4 text-green-600">
+            <div className="flex items-center">
+              <Check className="h-5 w-5 mr-1" />
+              <span className="text-sm">已阅读完毕，请勾选下方同意按钮</span>
             </div>
           </div>
         )}
@@ -165,12 +213,12 @@ const ConsentPage = () => {
             <Checkbox 
               id="terms" 
               checked={accepted} 
-              onCheckedChange={(checked) => setAccepted(!!checked)} 
-              disabled={!canAccept}
+              onCheckedChange={(checked) => handleCheckboxChange(!!checked)} 
+              className={canAccept ? "" : "cursor-not-allowed"}
             />
             <label
               htmlFor="terms"
-              className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed ${!canAccept ? 'text-gray-400' : 'text-gray-900'}`}
+              className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed ${canAccept ? 'text-gray-900 cursor-pointer' : 'text-gray-400 cursor-not-allowed'}`}
             >
               我已阅读并同意以上条款
             </label>
