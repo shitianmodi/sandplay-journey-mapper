@@ -6,14 +6,12 @@ import { useNavigate } from "react-router-dom";
 
 interface ConsentFormProps {
   accepted: boolean;
-  canAccept: boolean;
   onAcceptChange: (checked: boolean) => void;
   onContinue: () => void;
 }
 
 const ConsentForm: React.FC<ConsentFormProps> = ({ 
   accepted, 
-  canAccept, 
   onAcceptChange, 
   onContinue 
 }) => {
@@ -26,13 +24,10 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
           id="terms" 
           checked={accepted} 
           onCheckedChange={(checked) => onAcceptChange(!!checked)} 
-          className={canAccept ? "" : "cursor-not-allowed"}
         />
         <label
           htmlFor="terms"
-          className={`text-sm font-medium leading-none peer-disabled:cursor-not-allowed ${
-            canAccept ? 'text-gray-900 cursor-pointer' : 'text-gray-400 cursor-not-allowed'
-          }`}
+          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed text-gray-900 cursor-pointer"
         >
           我已阅读并同意以上条款
         </label>
@@ -47,8 +42,8 @@ const ConsentForm: React.FC<ConsentFormProps> = ({
         </Button>
         <Button 
           onClick={onContinue}
-          disabled={!accepted || !canAccept}
-          className={(!accepted || !canAccept) ? "opacity-50" : ""}
+          disabled={!accepted}
+          className={!accepted ? "opacity-50" : ""}
         >
           继续
         </Button>

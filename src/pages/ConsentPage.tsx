@@ -5,7 +5,6 @@ import { useToast } from "@/hooks/use-toast";
 import Layout from "../components/Layout";
 import { useConsentState } from "../hooks/useConsentState";
 import ScrollableConsent from "../components/consent/ScrollableConsent";
-import ScrollIndicator from "../components/consent/ScrollIndicator";
 import ConsentForm from "../components/consent/ConsentForm";
 
 const ConsentPage = () => {
@@ -14,21 +13,10 @@ const ConsentPage = () => {
   const { toast } = useToast();
   const {
     accepted,
-    canAccept,
-    handleScroll,
     handleCheckboxChange
   } = useConsentState();
 
   const handleContinue = () => {
-    if (!canAccept) {
-      toast({
-        variant: "destructive",
-        title: "请先阅读全文",
-        description: "请滑动至协议书底部后再进行同意操作",
-      });
-      return;
-    }
-    
     if (!accepted) {
       toast({
         variant: "destructive",
@@ -51,13 +39,10 @@ const ConsentPage = () => {
   return (
     <Layout title="咨询协议书" currentStep={1} showNavigation={true}>
       <div className="max-w-3xl mx-auto bg-white p-6 rounded-lg shadow-md animate-fade-in">
-        <ScrollableConsent onScroll={handleScroll} />
-        
-        <ScrollIndicator canAccept={canAccept} accepted={accepted} />
+        <ScrollableConsent onScroll={() => {}} />
         
         <ConsentForm 
           accepted={accepted}
-          canAccept={canAccept}
           onAcceptChange={handleCheckboxChange}
           onContinue={handleContinue}
         />

@@ -1,5 +1,5 @@
 
-import React, { UIEvent } from "react";
+import React from "react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ConsentAgreement from "./ConsentAgreement";
 
