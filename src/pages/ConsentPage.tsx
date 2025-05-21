@@ -64,7 +64,7 @@ const ConsentPage = () => {
       toast({
         variant: "destructive",
         title: "需要同意条款",
-        description: "请勾选"我已阅读并同意以上条款"",
+        description: "请勾选\"我已阅读并同意以上条款\"",
       });
       return;
     }
